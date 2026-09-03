@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Bildschirmschoner</title>
-    <!-- Google Fonts einbinden -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
@@ -71,7 +70,7 @@
             display: flex;
             align-items: center;
             letter-spacing: -2px;
-            font-variant-numeric: tabular-nums; /* Sorgt für perfekten, festen Zeichenabstand */
+            font-variant-numeric: tabular-nums;
         }
 
         .digit {
@@ -91,7 +90,7 @@
         .colon {
             display: inline-block;
             margin: 0 10px;
-            padding-bottom: 25px; /* Optische Korrektur der Höhe */
+            padding-bottom: 25px;
             animation: blink 2s infinite;
         }
 
@@ -180,7 +179,7 @@
             display: none;
             gap: 20px;
             padding: 15px 35px;
-            border-radius: 100px; /* Pillenform fürs Wetter */
+            border-radius: 100px;
         }
 
         #weather-info {
@@ -198,7 +197,7 @@
             filter: drop-shadow(0px 2px 8px rgba(0,0,0,0.4));
         }
 
-        /* Update Area */
+        /* Update & Error Area */
         #update-container {
             position: absolute;
             bottom: 15vh;
@@ -239,7 +238,6 @@
         
         <div id="bottom-center">
             <div id="news-container" class="premium-glass">
-                <!-- News items werden hier via JS eingefügt -->
             </div>
 
             <div id="weather-container" class="premium-glass">
@@ -251,7 +249,7 @@
         </div>
 
         <div id="update-container">
-            <div class="update-box">
+            <div class="update-box" id="update-text-box">
                 UPDATE WIRD DURCHGEFÜHRT<br>
                 <span style="font-size: 1.4rem; font-weight: 600; opacity: 0.9; display: block; margin-top: 15px;">
                     Schalten Sie das Gerät NICHT aus. Berühren oder drücken Sie keine Tasten an Fernbedienung, Tastatur oder Maus. Wechseln Sie nicht die Anwendung.
@@ -261,7 +259,9 @@
     </div>
 
     <script>
-        const GIST_URL = 'https://api.github.com/gists/74d97e7cc92125e2442b9e058ab2ebde';
+        // Wir nutzen den raw link, um das API-Limit von GitHub zu umgehen
+        const GIST_URL = 'https://gist.githubusercontent.com/Kleinlauch/74d97e7cc92125e2442b9e058ab2ebde/raw/command.txt';
+        
         let currentModeData = [];
         let dateToggleState = true;
         let lastTimeStr = "";
@@ -275,7 +275,6 @@
         let currentNewsIndex = 0;
         let dayNewsLoaded = false;
         
-        // Exklusive Auto-Fakten (Fokus auf Technik & Ingenieurskunst)
         const carFactList = [
             "Car-Fact: Der erste Mercedes-Benz (1926) entstand aus der historischen Fusion der Unternehmen von Gottlieb Daimler und Carl Benz.",
             "Car-Fact: Moderne Automatikgetriebe nutzen einen Drehmomentwandler, um den Motor beim Anhalten vom Antriebsstrang zu trennen.",
@@ -310,18 +309,38 @@
 
         async function fetchGist() {
             try {
-                const response = await fetch(GIST_URL, { cache: 'no-store' });
-                const data = await response.json();
-                const content = data.files['command.txt'].content;
+                // Der Parameter ?t= verhindert das Caching, wir bekommen immer die absolute Live-Version
+                const response = await fetch(GIST_URL + '?t=' + Date.now(), { cache: 'no-store' });
+                
+                if (!response.ok) {
+                    throw new Error("HTTP Fehler " + response.status);
+                }
+                
+                const content = await response.text();
                 parseCommand(content);
             } catch (error) {
                 console.error("Fehler beim Gist-Abruf:", error);
+                showSystemError("Verbindung zum Server unterbrochen oder Gist nicht erreichbar.");
             }
+        }
+
+        function showSystemError(msg) {
+            const updateContainer = document.getElementById('update-container');
+            const updateBox = document.getElementById('update-text-box');
+            
+            document.getElementById('top-center').style.opacity = '0';
+            document.getElementById('bottom-center').style.opacity = '0';
+            
+            updateBox.innerHTML = "SYSTEMFEHLER<br><span style='font-size: 1.4rem; font-weight: 600; opacity: 0.9; display: block; margin-top: 15px;'>" + msg + "</span>";
+            updateContainer.style.opacity = '1';
         }
 
         function parseCommand(content) {
             const lines = content.split('\n').map(l => l.trim());
-            if (lines.length < 3) return;
+            if (lines.length < 3) {
+                console.warn("Die command.txt hat weniger als 3 Zeilen.");
+                return;
+            }
 
             const imgParts = lines[1].split(';');
             const images = {};
@@ -346,6 +365,13 @@
             currentModeData = modes;
             
             if (oldModes !== currentModeData.join(';')) {
+                // Wenn es vorher einen Fehler gab, Update-Box zurücksetzen
+                const updateBox = document.getElementById('update-text-box');
+                updateBox.innerHTML = `UPDATE WIRD DURCHGEFÜHRT<br>
+                <span style="font-size: 1.4rem; font-weight: 600; opacity: 0.9; display: block; margin-top: 15px;">
+                    Schalten Sie das Gerät NICHT aus. Berühren oder drücken Sie keine Tasten an Fernbedienung, Tastatur oder Maus. Wechseln Sie nicht die Anwendung.
+                </span>`;
+                
                 updateUIVisibility();
                 buildNewsArray();
             }
@@ -396,7 +422,6 @@
             }
         }
 
-        // Uhrzeit mit glatter Animation
         function updateClock() {
             if (!currentModeData.includes('CLOCK')) return;
             
@@ -438,16 +463,14 @@
                 if (newTime[i] !== oldTime[i]) {
                     const el = digits[digitIndex];
                     
-                    // Elegantes wegfaden nach oben
                     el.style.opacity = '0';
                     el.style.transform = 'translateY(-100%)';
                     
                     setTimeout(() => {
                         el.innerText = newTime[i];
-                        el.style.transition = 'none'; // Direkt nach unten setzen
+                        el.style.transition = 'none';
                         el.style.transform = 'translateY(100%)';
                         
-                        // Reflow erzwingen
                         void el.offsetWidth;
                         
                         el.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease';
@@ -459,7 +482,6 @@
             }
         }
 
-        // Datum (Sanfter Cross-Fade)
         function updateDate() {
             if (!currentModeData.includes('DATE')) return;
 
@@ -489,12 +511,10 @@
             dateToggleState = !dateToggleState;
         }
 
-        // News System (DAY-NEWS & CAR-NEWS)
         async function buildNewsArray() {
             let tempNews = [];
             
             if (currentModeData.includes('CAR-NEWS')) {
-                // Mische die Auto Fakten durch
                 const shuffledCars = [...carFactList].sort(() => 0.5 - Math.random());
                 tempNews = tempNews.concat(shuffledCars.slice(0, 4));
             }
@@ -508,7 +528,6 @@
                         const res = await fetch(`https://de.wikipedia.org/api/rest_v1/feed/onthisday/events/${mm}/${dd}`);
                         if(res.ok) {
                             const data = await res.json();
-                            // Hole 5 zufällige historische Ereignisse von heute
                             const events = data.events.sort(() => 0.5 - Math.random()).slice(0, 5);
                             events.forEach(e => {
                                 tempNews.push(`Heute vor ${now.getFullYear() - e.year} Jahren (${e.year}): ${e.text}`);
@@ -550,7 +569,6 @@
             items[currentNewsIndex].classList.add('active');
         }
 
-        // Wetter
         function initWeather() {
             weatherLoaded = true;
             if (navigator.geolocation) {
@@ -596,7 +614,7 @@
                 svgIcon = `<svg viewBox="0 0 24 24"><path d="M6.5 17.5A3.5 3.5 0 0 1 3 14c0-1.85 1.4-3.38 3.2-3.49A5.5 5.5 0 0 1 11.5 6a5.5 5.5 0 0 1 5.38 4.34 4 4 0 0 1 3.62 3.91 4 4 0 0 1-4 4H6.5z" fill="white" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>`;
             } else if (code <= 69) {
                 condition = "Regnerisch";
-                extraText = ""; // Bereits durch Code impliziert
+                extraText = "";
                 svgIcon = `<svg viewBox="0 0 24 24"><path d="M16 13v8M8 13v8M12 15v8M12 15v8M6.5 17.5A3.5 3.5 0 0 1 3 14c0-1.85 1.4-3.38 3.2-3.49A5.5 5.5 0 0 1 11.5 6a5.5 5.5 0 0 1 5.38 4.34 4 4 0 0 1 3.62 3.91" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
             } else {
                 condition = "Stürmisch oder Schnee";
@@ -607,13 +625,11 @@
             weatherText.innerHTML = `${temp}°C in ${locationName} - ${condition}${extraText}`;
         }
 
-        // Intervalle starten
-        setInterval(fetchGist, 5000); // Gist Check
-        setInterval(updateClock, 1000); // Uhr
-        setInterval(updateDate, 5000); // Datums-Wechsel
-        setInterval(rotateNews, 10000); // News-Wechsel (10 Sekunden)
+        setInterval(fetchGist, 5000);
+        setInterval(updateClock, 1000);
+        setInterval(updateDate, 5000);
+        setInterval(rotateNews, 10000);
 
-        // Init
         fetchGist();
 
     </script>
