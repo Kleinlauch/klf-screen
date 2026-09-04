@@ -13,6 +13,7 @@
             --glass-border: rgba(255, 255, 255, 0.25);
             --glass-blur: blur(25px);
             --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            --menu-bg: rgba(10, 10, 10, 0.75);
         }
 
         body, html {
@@ -152,7 +153,7 @@
 
         #news-container {
             width: 100%;
-            min-height: 80px;
+            min-height: 100px;
             font-size: 1.4rem;
             font-weight: 600;
             line-height: 1.4;
@@ -222,9 +223,80 @@
             box-shadow: 0 10px 40px 0 rgba(200, 0, 0, 0.3);
         }
 
+        /* Secret Menu */
+        #settings-menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--menu-bg);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 25px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        #settings-menu.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .menu-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 600;
+            padding: 20px 40px;
+            border-radius: 15px;
+            cursor: pointer;
+            width: 400px;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .menu-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.02);
+        }
+
+        .menu-btn:focus {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: white;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .menu-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* Verstecktes Video fuer NoSleep Hack */
+        #nosleep-video {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
     </style>
 </head>
 <body>
+
+    <!-- NoSleep Fallback Video -->
+    <video id="nosleep-video" playsinline muted loop>
+        <source src="data:video/webm;base64,GkXfowEAAAAAAAAfQoaBAUL3gQFC8oEEQvOBCEKChHdlYm1Ch4ECQoWBAhhTgGcBAAAAAAAVgQFcY8lWTQEAAAAAAH4BAAAAAAAPgQEAAAAAAABHQweFAoUAAAAAAAAB7YEAQvSBB0LygwiFcIUFjxiGgAAAAAAEQp2BAEJTgQEDQ5OBCUVTjwIDU4EFRU6EAAD0AIWIQhUaHhoAAAAAAAAAAAB1gQFAAAABQAAAgQAAAEEBAAAAAAAABRQA2gCAgAAAAAAADZ9AAAAB4EEAAAAAAABAAAAB/wAAAAAAAAAAAAA=" type="video/webm">
+    </video>
 
     <div id="background"></div>
     <div id="overlay">
@@ -237,8 +309,7 @@
         </div>
         
         <div id="bottom-center">
-            <div id="news-container" class="premium-glass">
-            </div>
+            <div id="news-container" class="premium-glass"></div>
 
             <div id="weather-container" class="premium-glass">
                 <div id="weather-info">
@@ -258,13 +329,21 @@
         </div>
     </div>
 
+    <!-- Geheimes Menü -->
+    <div id="settings-menu">
+        <h2 style="margin-bottom: 20px; font-weight: 800; letter-spacing: 2px;">SYSTEM-EINSTELLUNGEN</h2>
+        <button class="menu-btn" id="btn-wakelock">Bildschirmschoner verhindern: AN</button>
+        <button class="menu-btn" id="btn-reload">Seite neu laden</button>
+        <button class="menu-btn" id="btn-close">Schließen</button>
+    </div>
+
     <script>
-        // Wir nutzen den raw link, um das API-Limit von GitHub zu umgehen
         const GIST_URL = 'https://gist.githubusercontent.com/Kleinlauch/74d97e7cc92125e2442b9e058ab2ebde/raw/command.txt';
         
         let currentModeData = [];
         let dateToggleState = true;
         let lastTimeStr = "";
+        let isMenuOpen = false;
         
         // Wetter
         let locationName = "Unbekannt";
@@ -275,26 +354,107 @@
         let currentNewsIndex = 0;
         let dayNewsLoaded = false;
         
+        // Massive Auto Fakten Datenbank
         const carFactList = [
             "Car-Fact: Der erste Mercedes-Benz (1926) entstand aus der historischen Fusion der Unternehmen von Gottlieb Daimler und Carl Benz.",
-            "Car-Fact: Moderne Automatikgetriebe nutzen einen Drehmomentwandler, um den Motor beim Anhalten vom Antriebsstrang zu trennen.",
-            "Car-Fact: Der Mercedes-Benz EQS erreicht durch perfektes Design einen cw-Wert von nur 0,20 - ein Rekord für Serienfahrzeuge.",
-            "Car-Fact: Die M139 Motorenbaureihe von Mercedes-AMG gilt als stärkster in Serie gefertigter Vierzylindermotor der Welt.",
-            "Car-Fact: Bei Vehicle-to-Load (V2L) Systemen fungiert der Hochvolt-Akku eines E-Autos als riesige Powerbank für externe 230V-Geräte.",
-            "Car-Fact: Ein modernes Doppelkupplungsgetriebe hat die Gänge auf zwei Teilgetriebe aufgeteilt, um Zugkraftunterbrechungen zu eliminieren.",
-            "Car-Fact: Die 9G-TRONIC von Mercedes-Benz war das weltweit erste 9-Gang-Automatikgetriebe im Premiumsegment mit Längsantrieb."
+            "Car-Fact: Moderne Automatikgetriebe nutzen einen Drehmomentwandler, um den Motor beim Anhalten vom Antriebsstrang zu trennen, ohne abzuwürgen.",
+            "Car-Fact: Der Mercedes-Benz EQS erreicht durch strömungsoptimiertes Design einen cw-Wert von nur 0,20 - ein Rekord für Serienfahrzeuge.",
+            "Car-Fact: Die M139 Motorenbaureihe von Mercedes-AMG gilt als stärkster in Serie gefertigter Vierzylindermotor der Welt (über 421 PS aus 2.0 Litern).",
+            "Car-Fact: Bei Vehicle-to-Load (V2L) Systemen fungiert der Hochvolt-Akku eines E-Autos als riesige Powerbank, die externe 230V-Geräte betreiben kann.",
+            "Car-Fact: Ein modernes Doppelkupplungsgetriebe hat die Gänge auf zwei Teilgetriebe aufgeteilt, um Zugkraftunterbrechungen beim Schalten vollständig zu eliminieren.",
+            "Car-Fact: Die 9G-TRONIC von Mercedes-Benz war das weltweit erste 9-Gang-Automatikgetriebe im Premiumsegment mit Längsantrieb.",
+            "Car-Fact: Bei der 'Hot-Inside-V' Konstruktion von AMG-Motoren liegen die Turbolader innen zwischen den Zylinderbänken, was das Ansprechverhalten drastisch verbessert.",
+            "Car-Fact: Die MGU-H (Motor Generator Unit - Heat) aus der Formel 1 nutzt die Abgasenergie, um den Turbolader elektrisch anzutreiben und das Turboloch auszulöschen. AMG nutzt diese Technik nun im AMG ONE und C63.",
+            "Car-Fact: Torque Vectoring erlaubt es, die Antriebskraft an der Hinterachse radselektiv zu verteilen, was das Auto förmlich in die Kurve drückt.",
+            "Car-Fact: Ein Formel-1-Auto generiert bei 200 km/h so viel aerodynamischen Abtrieb (Downforce), dass es theoretisch kopfüber an der Decke eines Tunnels fahren könnte.",
+            "Car-Fact: Das Magic Body Control Fahrwerk von Mercedes-Benz scannt die Straße per Stereo-Kamera und passt die Federung in Bruchteilen von Sekunden pro Rad an Unebenheiten an.",
+            "Car-Fact: Carbon-Keramik-Bremsscheiben verblassen (Fading) bei extremer Hitze nicht und wiegen rund 50 % weniger als vergleichbare Stahlbremsscheiben, was die ungefederte Masse reduziert.",
+            "Car-Fact: Trockensumpfschmierung verzichtet auf eine klassische Ölwanne unter dem Motor. Stattdessen wird das Öl in einen separaten Tank gepumpt, um selbst bei extremen Fliehkräften eine konstante Schmierung zu garantieren.",
+            "Car-Fact: Ein 800-Volt-Bordnetz (wie im Porsche Taycan oder Hyundai Ioniq 5) erlaubt deutlich dünnere Kabelquerschnitte, spart Gewicht und ermöglicht Ladeleistungen von bis zu 350 kW.",
+            "Car-Fact: Die Ackermann-Lenkgeometrie sorgt dafür, dass das kurveninnere Rad stärker einlenkt als das äußere, da es einen kleineren Kurvenradius abfahren muss.",
+            "Car-Fact: Das legendäre Porsche PDK (Porsche Doppelkupplungsgetriebe) kann Gänge in Millisekunden wechseln und gilt bis heute als Benchmark für Schaltgeschwindigkeit und Haltbarkeit unter Launch-Control-Belastung.",
+            "Car-Fact: Ein Kompressor (Supercharger) wird direkt über einen Riemen von der Kurbelwelle angetrieben. Das kostet zwar Motorleistung, liefert aber Ladedruck ohne jede Verzögerung.",
+            "Car-Fact: Variable Turbinengeometrie (VTG) bei Turboladern verändert den Anströmwinkel der Abgase, um bei niedrigen Drehzahlen schnell Ladedruck aufzubauen und bei hohen Drehzahlen nicht zu überdrehen.",
+            "Car-Fact: Der erste Serien-Pkw mit ABS (Antiblockiersystem) war die Mercedes-Benz S-Klasse (Baureihe W116) im Jahr 1978.",
+            "Car-Fact: Ungefederte Massen (Räder, Bremsen, Radträger) verschlechtern den Fahrkomfort und die Traktion. Leichtmetallfelgen und Aluminium-Fahrwerksteile reduzieren dieses Gewicht.",
+            "Car-Fact: Die Zündfolge eines klassischen V8-Motors vom Typ Crossplane (z.B. 1-8-4-3-6-5-7-2) ist verantwortlich für das charakteristische, blubbernde Motorengeräusch amerikanischer Muscle-Cars.",
+            "Car-Fact: Flatplane-V8-Motoren (oft bei Ferrari oder McLaren genutzt) haben einen Kurbelwellenversatz von 180 Grad statt 90 Grad. Sie drehen extrem hoch und klingen eher wie zwei gekoppelte Vierzylinder.",
+            "Car-Fact: Aktive Wankstabilisierung nutzt 48-Volt-Elektromotoren an den Stabilisatoren, um in Kurven ein Neigen der Karosserie aktiv mit enormer Kraft zu verhindern.",
+            "Car-Fact: Das ESP (Elektronisches Stabilitätsprogramm) wurde 1995 von Bosch und Mercedes-Benz im S 600 Coupé eingeführt und korrigiert Schleudern durch gezieltes Abbremsen einzelner Räder.",
+            "Car-Fact: Ein Sperrdifferenzial verhindert, dass bei Kurvenfahrten oder auf rutschigem Untergrund die gesamte Antriebskraft am Rad mit dem wenigsten Grip verpufft.",
+            "Car-Fact: Moderne E-Autos nutzen permanenterregte Synchronmaschinen (PSM), da diese eine extrem hohe Leistungsdichte und Effizienz bieten. Die Rotoren sind dabei mit Seltenen Erden magnetisiert.",
+            "Car-Fact: P3-Hybride haben ihren Elektromotor nicht direkt am Verbrennungsmotor, sondern im Getriebe oder an der Kardanwelle. P4-Hybride platzieren den E-Motor komplett entkoppelt an der Hinterachse (E-Achse).",
+            "Car-Fact: Der Pagani Zonda und Huayra werden exklusiv von V12-Motoren angetrieben, die in Handarbeit bei Mercedes-AMG in Affalterbach gefertigt werden.",
+            "Car-Fact: Ein Diffusor am Heck eines Autos beschleunigt die unter dem Fahrzeugboden austretende Luft. Das erzeugt einen Unterdruck (Ground-Effect), der das Auto an den Asphalt saugt.",
+            "Car-Fact: Stoßdämpfer dämpfen eigentlich keine Stöße - das machen die Federn. Der Dämpfer beruhigt die Feder und verhindert, dass das Auto nach einer Bodenwelle unkontrolliert nachwippt.",
+            "Car-Fact: Der Begriff 'Transaxle-Bauweise' bedeutet, dass der Motor vorne, das Getriebe aber an der Hinterachse sitzt (z.B. im Mercedes-AMG GT). Das sorgt für eine perfekte Gewichtsverteilung von nahezu 50:50.",
+            "Car-Fact: Ein MacPherson-Federbein vereint Radführung, Federung und Dämpfung in einem Bauteil. Es ist extrem platzsparend und wird bei fast allen modernen Kompaktwagen an der Vorderachse genutzt.",
+            "Car-Fact: Doppelquerlenker-Aufhängungen sind aufwändiger und teurer als MacPherson-Systeme, bieten aber eine wesentlich konstantere Radaufstandsfläche beim Einfedern und Einlenken.",
+            "Car-Fact: Das legendäre Mercedes-Benz 300 SL 'Gullwing' (Flügeltürer) Coupé brauchte seine Flügeltüren nicht aus Designgründen, sondern weil sein leichter Gitterrohrrahmen extrem hohe Seitenschweller erforderte.",
+            "Car-Fact: Die By-Wire-Technologie ersetzt mechanische Verbindungen durch elektronische Signale. Beim 'Brake-by-Wire' betätigt das Bremspedal nur einen Sensor, der Bremsdruck wird von einem elektrischen Aktuator erzeugt.",
+            "Car-Fact: Ein Zweimassenschwungrad (ZMS) sitzt zwischen Motor und Getriebe. Es besteht aus zwei durch Federn verbundenen Massen und absorbiert die harten Drehschwingungen des Verbrennungsmotors."
         ];
 
-        // Vollbild
-        let lastClickTime = 0;
-        document.addEventListener('click', () => {
-            const now = Date.now();
-            if (now - lastClickTime <= 5000) {
-                toggleFullScreen();
-                lastClickTime = 0; 
-            } else {
-                lastClickTime = now;
+        // --- WakeLock & NoSleep System ---
+        let wakeLock = null;
+        let preventSleepEnabled = true;
+        const noSleepVideo = document.getElementById('nosleep-video');
+
+        async function enableWakeLock() {
+            if (!preventSleepEnabled) return;
+            
+            // Video Fallback (iOS / Altgeräte)
+            noSleepVideo.play().catch(() => {});
+
+            // Moderne WakeLock API
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                } catch (err) {
+                    console.log("WakeLock API nicht verfügbar, Fallback-Video aktiv.");
+                }
             }
+        }
+
+        function disableWakeLock() {
+            noSleepVideo.pause();
+            if (wakeLock !== null) {
+                wakeLock.release().then(() => { wakeLock = null; });
+            }
+        }
+
+        // Bei Sichtbarkeitswechsel WakeLock erneuern, wenn die Seite wieder im Vordergrund ist
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                enableWakeLock();
+            }
+        });
+
+
+        // --- Klick & Menü Logik ---
+        let clickCount = 0;
+        let clickTimer;
+
+        // Overlay Klicks abfangen (damit das Menü keine globalen Klicks triggert)
+        document.getElementById('overlay').style.pointerEvents = 'none';
+
+        document.addEventListener('click', (e) => {
+            // WakeLock bei der ersten Nutzerinteraktion aktivieren (Browser-Sicherheitsrichtlinie)
+            if (preventSleepEnabled) enableWakeLock();
+
+            // Klicks auf das Menü selbst ignorieren
+            if (isMenuOpen) return;
+
+            clickCount++;
+            clearTimeout(clickTimer);
+            clickTimer = setTimeout(() => {
+                if (clickCount >= 4) {
+                    openMenu();
+                } else if (clickCount >= 2) {
+                    toggleFullScreen();
+                }
+                clickCount = 0;
+            }, 350); 
         });
 
         function toggleFullScreen() {
@@ -307,9 +467,67 @@
             }
         }
 
+
+        // --- Menü Steuerung ---
+        const menuEl = document.getElementById('settings-menu');
+        const btnWakelock = document.getElementById('btn-wakelock');
+        const btnReload = document.getElementById('btn-reload');
+        const btnClose = document.getElementById('btn-close');
+        const menuButtons = [btnWakelock, btnReload, btnClose];
+
+        function openMenu() {
+            isMenuOpen = true;
+            menuEl.classList.add('active');
+            btnWakelock.focus(); // Setzt den Fokus für Tastatur-Navigation
+        }
+
+        function closeMenu() {
+            isMenuOpen = false;
+            menuEl.classList.remove('active');
+            // Fokus entfernen, damit keine blauen Rahmen bleiben
+            document.activeElement.blur();
+        }
+
+        btnWakelock.addEventListener('click', () => {
+            preventSleepEnabled = !preventSleepEnabled;
+            if (preventSleepEnabled) {
+                btnWakelock.innerText = "Bildschirmschoner verhindern: AN";
+                enableWakeLock();
+            } else {
+                btnWakelock.innerText = "Bildschirmschoner verhindern: AUS";
+                disableWakeLock();
+            }
+        });
+
+        btnReload.addEventListener('click', () => {
+            window.location.reload();
+        });
+
+        btnClose.addEventListener('click', closeMenu);
+
+        // Tastatur Navigation (Pfeiltasten & Enter)
+        document.addEventListener('keydown', (e) => {
+            if (!isMenuOpen) return;
+            
+            const activeIndex = menuButtons.indexOf(document.activeElement);
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                let nextIndex = activeIndex >= 0 ? (activeIndex + 1) % menuButtons.length : 0;
+                menuButtons[nextIndex].focus();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                let prevIndex = activeIndex >= 0 ? (activeIndex - 1 + menuButtons.length) % menuButtons.length : menuButtons.length - 1;
+                menuButtons[prevIndex].focus();
+            } else if (e.key === 'Escape') {
+                closeMenu();
+            }
+        });
+
+
+        // --- Datenabruf via Gist ---
         async function fetchGist() {
             try {
-                // Der Parameter ?t= verhindert das Caching, wir bekommen immer die absolute Live-Version
                 const response = await fetch(GIST_URL + '?t=' + Date.now(), { cache: 'no-store' });
                 
                 if (!response.ok) {
@@ -337,10 +555,7 @@
 
         function parseCommand(content) {
             const lines = content.split('\n').map(l => l.trim());
-            if (lines.length < 3) {
-                console.warn("Die command.txt hat weniger als 3 Zeilen.");
-                return;
-            }
+            if (lines.length < 3) return;
 
             const imgParts = lines[1].split(';');
             const images = {};
@@ -365,7 +580,6 @@
             currentModeData = modes;
             
             if (oldModes !== currentModeData.join(';')) {
-                // Wenn es vorher einen Fehler gab, Update-Box zurücksetzen
                 const updateBox = document.getElementById('update-text-box');
                 updateBox.innerHTML = `UPDATE WIRD DURCHGEFÜHRT<br>
                 <span style="font-size: 1.4rem; font-weight: 600; opacity: 0.9; display: block; margin-top: 15px;">
@@ -422,22 +636,34 @@
             }
         }
 
-        function updateClock() {
-            if (!currentModeData.includes('CLOCK')) return;
-            
-            const now = new Date();
-            const h = String(now.getHours()).padStart(2, '0');
-            const m = String(now.getMinutes()).padStart(2, '0');
-            const s = String(now.getSeconds()).padStart(2, '0');
-            const timeStr = `${h}:${m}:${s}`;
+        // --- Uhrzeit Logik (Extrem Präzise Syncronisation) ---
+        let lastSecondForClock = -1;
 
-            if (lastTimeStr === "") {
-                buildClockHTML(timeStr);
-                lastTimeStr = timeStr;
-            } else if (lastTimeStr !== timeStr) {
-                updateClockHTML(timeStr, lastTimeStr);
-                lastTimeStr = timeStr;
+        function clockLoop() {
+            if (currentModeData.includes('CLOCK')) {
+                const now = new Date();
+                const s = now.getSeconds();
+                
+                // Sobald sich die Sekunde ändert, feuert das UI Update
+                if (s !== lastSecondForClock) {
+                    lastSecondForClock = s;
+                    
+                    const hStr = String(now.getHours()).padStart(2, '0');
+                    const mStr = String(now.getMinutes()).padStart(2, '0');
+                    const sStr = String(s).padStart(2, '0');
+                    const timeStr = `${hStr}:${mStr}:${sStr}`;
+
+                    if (lastTimeStr === "") {
+                        buildClockHTML(timeStr);
+                        lastTimeStr = timeStr;
+                    } else if (lastTimeStr !== timeStr) {
+                        updateClockHTML(timeStr, lastTimeStr);
+                        lastTimeStr = timeStr;
+                    }
+                }
             }
+            // Immer auf den nächsten Frame warten (ca. 60-144x pro Sekunde)
+            requestAnimationFrame(clockLoop);
         }
 
         function buildClockHTML(timeStr) {
@@ -471,7 +697,7 @@
                         el.style.transition = 'none';
                         el.style.transform = 'translateY(100%)';
                         
-                        void el.offsetWidth;
+                        void el.offsetWidth; // Reflow erzwingen
                         
                         el.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease';
                         el.style.opacity = '1';
@@ -515,8 +741,9 @@
             let tempNews = [];
             
             if (currentModeData.includes('CAR-NEWS')) {
+                // Alle Auto-Fakten mischen und nehmen wir einfach 15 Stück für eine lange Rotation
                 const shuffledCars = [...carFactList].sort(() => 0.5 - Math.random());
-                tempNews = tempNews.concat(shuffledCars.slice(0, 4));
+                tempNews = tempNews.concat(shuffledCars.slice(0, 15));
             }
 
             if (currentModeData.includes('DAY-NEWS')) {
@@ -528,7 +755,7 @@
                         const res = await fetch(`https://de.wikipedia.org/api/rest_v1/feed/onthisday/events/${mm}/${dd}`);
                         if(res.ok) {
                             const data = await res.json();
-                            const events = data.events.sort(() => 0.5 - Math.random()).slice(0, 5);
+                            const events = data.events.sort(() => 0.5 - Math.random()).slice(0, 8);
                             events.forEach(e => {
                                 tempNews.push(`Heute vor ${now.getFullYear() - e.year} Jahren (${e.year}): ${e.text}`);
                             });
@@ -625,12 +852,16 @@
             weatherText.innerHTML = `${temp}°C in ${locationName} - ${condition}${extraText}`;
         }
 
+        // Intervalle
         setInterval(fetchGist, 5000);
-        setInterval(updateClock, 1000);
         setInterval(updateDate, 5000);
-        setInterval(rotateNews, 10000);
+        setInterval(rotateNews, 12000); // 12 Sekunden Lesezeit pro Fact
 
+        // Initialisierungen
         fetchGist();
+        
+        // Startet den hochpräzisen Uhrzeit-Loop
+        requestAnimationFrame(clockLoop);
 
     </script>
 </body>
